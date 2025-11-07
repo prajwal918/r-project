@@ -1,0 +1,263 @@
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(glmnet)  
+library(class) 
+library(rpart) 
+library(rpart.plot)  
+library(e1071)  
+library(gbm)  
+library(xgboost)  
+library(nnet)  
+
+
+churn_data <- read.csv("WA_Fn-UseC_-Telco-Customer-Churn.xls")
+
+# --- Data Cleaning and Preparation ---
+# Convert TotalCharges to numeric and impute NAs with 0.
+# Remove customerID since it's an identifier not useful for modeling.
+churn_data <- churn_data %>%
+  mutate(TotalCharges = as.numeric(TotalCharges)) %>%
+  mutate(TotalCharges = ifelse(is.na(TotalCharges), 0, TotalCharges)) %>%
+  select(-customerID) 
+
+# Recode 'No internet service' to 'No' for relevant columns
+# Recode 'No phone service' to 'No' for MultipleLines to align semantics.
+churn_data <- churn_data %>%
+  mutate(across(c(OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport,
+                  StreamingTV, StreamingMovies),
+                ~ recode(., "No internet service" = "No"))) %>%
+  mutate(MultipleLines = recode(MultipleLines, "No phone service" = "No"))
+
+# Convert remaining character columns to factors to prepare for classification models.
+churn_data <- churn_data %>%
+  mutate(across(where(is.character), as.factor))
+
+# --- Analysis and Visualization ---
+# Calculate and print the overall churn rate to understand class balance.
+churn_rate <- churn_data %>%
+  count(Churn) %>%
+  mutate(Proportion = n / sum(n))
+print(churn_rate)
+
+# Bar chart: Churn counts by contract type (month-to-month typically has higher churn).
+ggplot(churn_data, aes(x = Contract, fill = Churn)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Customer Churn by Contract Type",
+       x = "Contract Type",
+       y = "Number of Customers") +
+  theme_minimal()
+
+# Bar chart: Churn counts by internet service type (fiber often shows higher churn than DSL/None).
+ggplot(churn_data, aes(x = InternetService, fill = Churn)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Customer Churn by Internet Service Type",
+       x = "Internet Service",
+       y = "Number of Customers") +
+  theme_minimal()
+
+# Box plot: Compare MonthlyCharges across churn status; churners often have higher charges.
+ggplot(churn_data, aes(x = Churn, y = MonthlyCharges, fill = Churn)) +
+  geom_boxplot() +
+  labs(title = "Monthly Charges by Churn Status",
+       x = "Churn Status",
+       y = "Monthly Charges ($)") +
+  theme_minimal()
+
+# Simple correlation matrix among key numeric variables for quick relationships overview.
+numeric_data <- churn_data %>% select(tenure, MonthlyCharges, TotalCharges)
+correlation_matrix <- cor(numeric_data)
+print(correlation_matrix)
+
+# --- Train/Test Split (80/20) ---
+set.seed(123)
+# Ensure response is a factor (should already be from earlier step)
+churn_data$Churn <- as.factor(churn_data$Churn)
+
+trainIndex <- createDataPartition(churn_data$Churn, p = 0.8, list = FALSE, times = 1)
+train_data <- churn_data[trainIndex, ]
+test_data  <- churn_data[-trainIndex, ]
+
+# --- Train Models ---
+# Logistic Regression
+log_model <- glm(Churn ~ ., data = train_data, family = binomial)
+# Random Forest
+rf_model <- randomForest(Churn ~ ., data = train_data)
+
+# --- Evaluate Models ---
+# Logistic Regression Predictions
+log_predictions <- predict(log_model, test_data, type = "response")
+log_pred_class <- factor(ifelse(log_predictions > 0.5, "Yes", "No"),
+                         levels = levels(test_data$Churn))
+cm_log <- confusionMatrix(log_pred_class, test_data$Churn, positive = "Yes")
+print(cm_log)
+
+# Random Forest Predictions
+rf_predictions <- predict(rf_model, test_data)
+rf_predictions <- factor(rf_predictions, levels = levels(test_data$Churn))
+cm_rf <- confusionMatrix(rf_predictions, test_data$Churn, positive = "Yes")
+print(cm_rf)
+
+# --- k-Nearest Neighbors (k-NN) ---
+# k-NN requires numeric features; prepare data matrix
+cat("\n=== k-Nearest Neighbors (k-NN) ===\n")
+# Normalize features for k-NN (important as k-NN is distance-based)
+preproc <- preProcess(train_data[, -which(names(train_data) == "Churn")], method = c("center", "scale"))
+train_scaled <- predict(preproc, train_data)
+test_scaled <- predict(preproc, test_data)
+
+# Train k-NN with k=5
+set.seed(123)
+knn_model <- train(Churn ~ ., data = train_scaled, method = "knn",
+                   tuneGrid = data.frame(k = 5),
+                   trControl = trainControl(method = "none"))
+knn_predictions <- predict(knn_model, test_scaled)
+cm_knn <- confusionMatrix(knn_predictions, test_data$Churn, positive = "Yes")
+print(cm_knn)
+
+# --- Decision Tree ---
+cat("\n=== Decision Tree ===\n")
+set.seed(123)
+# Train decision tree with complexity parameter tuning
+tree_model <- rpart(Churn ~ ., data = train_data, method = "class",
+                    control = rpart.control(cp = 0.01))
+# Visualize the tree
+rpart.plot(tree_model, main = "Decision Tree for Churn Prediction")
+
+# Predictions
+tree_predictions <- predict(tree_model, test_data, type = "class")
+cm_tree <- confusionMatrix(tree_predictions, test_data$Churn, positive = "Yes")
+print(cm_tree)
+
+# --- Naive Bayes ---
+cat("\n=== Naive Bayes ===\n")
+set.seed(123)
+# Train Naive Bayes classifier (assumes feature independence)
+nb_model <- naiveBayes(Churn ~ ., data = train_data)
+
+# Predictions
+nb_predictions <- predict(nb_model, test_data)
+cm_nb <- confusionMatrix(nb_predictions, test_data$Churn, positive = "Yes")
+print(cm_nb)
+
+# --- Support Vector Machine (SVM) ---
+cat("\n=== Support Vector Machine (SVM) ===\n")
+set.seed(123)
+# Train SVM with radial basis function kernel
+# Note: SVM can be slow on large datasets
+svm_model <- svm(Churn ~ ., data = train_data, kernel = "radial", cost = 1, gamma = 0.1)
+
+# Predictions
+svm_predictions <- predict(svm_model, test_data)
+cm_svm <- confusionMatrix(svm_predictions, test_data$Churn, positive = "Yes")
+print(cm_svm)
+
+# --- Gradient Boosting Machine (GBM) ---
+cat("\n=== Gradient Boosting Machine (GBM) ===\n")
+set.seed(123)
+# Convert target to numeric (0/1) for gbm
+train_gbm <- train_data %>% mutate(Churn_num = ifelse(Churn == "Yes", 1, 0))
+test_gbm <- test_data %>% mutate(Churn_num = ifelse(Churn == "Yes", 1, 0))
+
+# Train GBM with reasonable defaults
+gbm_model <- gbm(Churn_num ~ . - Churn, data = train_gbm,
+                 distribution = "bernoulli",
+                 n.trees = 100,
+                 interaction.depth = 3,
+                 shrinkage = 0.1,
+                 cv.folds = 5,
+                 verbose = FALSE)
+
+# Find optimal number of trees
+best_iter <- gbm.perf(gbm_model, method = "cv", plot.it = TRUE)
+cat("Optimal number of trees:", best_iter, "\n")
+
+# Predictions
+gbm_pred_prob <- predict(gbm_model, test_gbm, n.trees = best_iter, type = "response")
+gbm_pred_class <- factor(ifelse(gbm_pred_prob > 0.5, "Yes", "No"), levels = levels(test_data$Churn))
+cm_gbm <- confusionMatrix(gbm_pred_class, test_data$Churn, positive = "Yes")
+print(cm_gbm)
+
+# --- XGBoost ---
+cat("\n=== XGBoost ===\n")
+set.seed(123)
+# Prepare data for XGBoost (requires matrix format)
+x_train_xgb <- model.matrix(Churn ~ ., data = train_data)[, -1]
+x_test_xgb <- model.matrix(Churn ~ ., data = test_data)[, -1]
+y_train_xgb <- ifelse(train_data$Churn == "Yes", 1, 0)
+y_test_xgb <- ifelse(test_data$Churn == "Yes", 1, 0)
+
+# Create DMatrix for XGBoost
+dtrain <- xgb.DMatrix(data = x_train_xgb, label = y_train_xgb)
+dtest <- xgb.DMatrix(data = x_test_xgb, label = y_test_xgb)
+
+# Train XGBoost with cross-validation
+xgb_params <- list(
+  objective = "binary:logistic",
+  eval_metric = "logloss",
+  max_depth = 3,
+  eta = 0.1,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+# Cross-validation to find optimal number of rounds
+xgb_cv <- xgb.cv(params = xgb_params, data = dtrain, nrounds = 100,
+                 nfold = 5, early_stopping_rounds = 10, verbose = 0)
+best_nrounds <- xgb_cv$best_iteration
+cat("Optimal number of rounds:", best_nrounds, "\n")
+
+# Train final model
+xgb_model <- xgb.train(params = xgb_params, data = dtrain, nrounds = best_nrounds, verbose = 0)
+
+# Feature importance
+importance_matrix <- xgb.importance(model = xgb_model)
+print(importance_matrix)
+xgb.plot.importance(importance_matrix, top_n = 10, main = "XGBoost Feature Importance")
+
+# Predictions
+xgb_pred_prob <- predict(xgb_model, dtest)
+xgb_pred_class <- factor(ifelse(xgb_pred_prob > 0.5, "Yes", "No"), levels = levels(test_data$Churn))
+cm_xgb <- confusionMatrix(xgb_pred_class, test_data$Churn, positive = "Yes")
+print(cm_xgb)
+
+# --- Neural Network (ANN) ---
+cat("\n=== Neural Network (ANN) ===\n")
+set.seed(123)
+# Prepare normalized data for neural network
+train_nn <- predict(preproc, train_data)
+test_nn <- predict(preproc, test_data)
+
+# Convert target to numeric
+train_nn$Churn_num <- ifelse(train_nn$Churn == "Yes", 1, 0)
+test_nn$Churn_num <- ifelse(test_nn$Churn == "Yes", 1, 0)
+
+# Train neural network with 1 hidden layer of 5 nodes
+nn_model <- nnet(Churn ~ ., data = train_nn, size = 5, maxit = 200, decay = 0.01, trace = FALSE)
+
+# Predictions
+nn_predictions_raw <- predict(nn_model, test_nn, type = "class")
+nn_predictions <- factor(nn_predictions_raw, levels = levels(test_data$Churn))
+cm_nn <- confusionMatrix(nn_predictions, test_data$Churn, positive = "Yes")
+print(cm_nn)
+
+# --- Linear Probability Model (LPM) ---
+# Create numeric target for linear regression (0/1) without altering original columns
+train_lpm <- train_data %>% mutate(Churn_num = if_else(Churn == "Yes", 1, 0))
+test_lpm  <- test_data  %>% mutate(Churn_num = if_else(Churn == "Yes", 1, 0))
+
+# Fit linear regression using all predictors except the factor target
+lpm_model <- lm(Churn_num ~ . - Churn, data = train_lpm)
+print(summary(lpm_model))
+
+# Predict numeric values (may fall outside [0,1]) and evaluate
+lpm_pred_num <- predict(lpm_model, newdata = test_lpm)
+rmse <- sqrt(mean((lpm_pred_num - test_lpm$Churn_num)^2))
+prop_out_of_bounds <- mean(lpm_pred_num < 0 | lpm_pred_num > 1)
+print(list(LPM_RMSE = rmse, Proportion_Out_Of_Bounds = prop_out_of_bounds))
+
+# Classify at 0.5 threshold and compute confusion matrix
+lpm_pred_class <- factor(ifelse(lpm_pred_num > 0.5, "Yes", "No"), levels = levels(test_data$Churn))
+cm_lpm <- confusionMatrix(lpm_pred_class, test_data$Churn, positive = "Yes")
+print(cm_lpm)
