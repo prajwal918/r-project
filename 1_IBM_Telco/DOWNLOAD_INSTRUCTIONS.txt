@@ -1,0 +1,37 @@
+========================================================================
+DATASET 1: IBM TELCO CUSTOMER CHURN
+========================================================================
+
+Records: 7,043 customers
+Features: 21 columns
+Expected Accuracy: ~80-82% (Max limit)
+
+========================================================================
+DOWNLOAD LINK:
+========================================================================
+https://www.kaggle.com/datasets/blastchar/telco-customer-churn
+
+OR Direct link:
+https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/master/data/Telco-Customer-Churn.csv
+
+========================================================================
+HOW TO DOWNLOAD:
+========================================================================
+1. Go to the Kaggle link above
+2. Click "Download" button (requires free Kaggle account)
+3. Save file as: WA_Fn-UseC_-Telco-Customer-Churn.csv
+4. Place in this folder: 1_IBM_Telco/
+
+OR use the download script provided.
+
+========================================================================
+FILE TO DOWNLOAD:
+========================================================================
+- WA_Fn-UseC_-Telco-Customer-Churn.csv (or Telco-Customer-Churn.csv)
+
+========================================================================
+AFTER DOWNLOAD:
+========================================================================
+Run: Rscript TRAIN_IBM_TELCO.R
+
+This is your CURRENT dataset - max ~82% accuracy
