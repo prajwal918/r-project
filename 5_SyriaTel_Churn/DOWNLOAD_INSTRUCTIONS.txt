@@ -1,0 +1,57 @@
+========================================================================
+DATASET 5: SYRITEL (CHURN IN TELECOM) ⭐
+========================================================================
+
+Records: 3,333 customers
+Features: 21 columns (call details)
+Expected Accuracy: 83-85%
+
+========================================================================
+DOWNLOAD LINK:
+========================================================================
+https://www.kaggle.com/datasets/becksddf/churn-in-telecoms-dataset
+
+========================================================================
+HOW TO DOWNLOAD:
+========================================================================
+1. Go to: https://www.kaggle.com/datasets/becksddf/churn-in-telecoms-dataset
+2. Click "Download" button (requires free Kaggle account)
+3. Extract ZIP file
+4. Place CSV file in this folder: 5_SyriaTel_Churn/
+
+========================================================================
+FILE TO DOWNLOAD:
+========================================================================
+- bigml_59c28831336c6604c800002a.csv (or churn.csv)
+
+========================================================================
+FEATURES (21 columns):
+========================================================================
+1. state - US state
+2. account_length - Duration
+3. area_code - Area code
+4. international_plan - Yes/No
+5. voice_mail_plan - Yes/No  
+6. number_vmail_messages - Voicemail count
+7. total_day_minutes - Day usage
+8. total_day_calls - Day calls
+9. total_day_charge - Day charges
+10. total_eve_minutes - Evening usage
+11. total_eve_calls - Evening calls
+12. total_eve_charge - Evening charges
+13. total_night_minutes - Night usage
+14. total_night_calls - Night calls
+15. total_night_charge - Night charges
+16. total_intl_minutes - International usage
+17. total_intl_calls - International calls
+18. total_intl_charge - International charges
+19. customer_service_calls - Service calls (KEY!)
+20. phone_number - Phone number (remove)
+21. churn - TARGET (True/False)
+
+========================================================================
+AFTER DOWNLOAD:
+========================================================================
+Run: Rscript TRAIN_SYRITEL_CHURN_85.R
+
+Similar to Orange Telecom - Good dataset!

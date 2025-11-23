@@ -1,0 +1,48 @@
+========================================================================
+DATASET 4: IRANIAN CHURN (ALREADY DOWNLOADED!) ⭐
+========================================================================
+
+Records: 3,150 customers
+Features: 14 columns (behavioral data)
+Expected Accuracy: 85%+ ✅
+Status: ✅ ALREADY DOWNLOADED!
+
+========================================================================
+DOWNLOAD LINK:
+========================================================================
+https://www.kaggle.com/datasets/tombutton/iranian-telecom-company-churn
+
+OR UCI Repository:
+https://archive.ics.uci.edu/dataset/563/iranian+churn+dataset
+
+========================================================================
+FILE LOCATION:
+========================================================================
+✅ Already downloaded at: ../iranian_churn/Customer Churn.csv
+
+You can copy it here or use the existing file.
+
+========================================================================
+FEATURES (14 columns):
+========================================================================
+1. Call.Failure - Number of failed calls (KEY!)
+2. Complains - Customer complaints (KEY!)
+3. Subscription.Length - How long subscribed
+4. Charge.Amount - Monthly charges
+5. Seconds.of.Use - Total usage in seconds
+6. Frequency.of.use - How often uses service
+7. Frequency.of.SMS - SMS usage
+8. Distinct.Called.Numbers - Unique numbers called
+9. Age.Group - Age category
+10. Tariff.Plan - Pricing plan
+11. Status - Account status
+12. Age - Actual age
+13. Customer.Value - Calculated value score
+14. Churn - TARGET (0/1)
+
+========================================================================
+AFTER SETUP:
+========================================================================
+Run: Rscript TRAIN_IRANIAN_CHURN_85.R
+
+Good behavioral predictors - Can reach 85%!

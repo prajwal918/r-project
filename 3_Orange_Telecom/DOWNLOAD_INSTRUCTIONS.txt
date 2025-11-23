@@ -1,0 +1,57 @@
+========================================================================
+DATASET 3: ORANGE TELECOM CHURN ⭐⭐
+========================================================================
+
+Records: ~3,333 customers (Training: 2,666 + Test: 667)
+Features: 20 columns (call patterns, usage data)
+Expected Accuracy: 85-88% ✅
+
+========================================================================
+DOWNLOAD LINK:
+========================================================================
+https://www.kaggle.com/datasets/mnassrib/telecom-churn-datasets
+
+========================================================================
+HOW TO DOWNLOAD:
+========================================================================
+1. Go to: https://www.kaggle.com/datasets/mnassrib/telecom-churn-datasets
+2. Click "Download" button (requires free Kaggle account)
+3. Extract ZIP file
+4. Place BOTH files in this folder: 3_Orange_Telecom/
+
+========================================================================
+FILES TO DOWNLOAD (2 files):
+========================================================================
+- churn-bigml-80.csv (Training set: 2,666 rows)
+- churn-bigml-20.csv (Test set: 667 rows)
+
+========================================================================
+FEATURES (20 columns):
+========================================================================
+1. State - US state
+2. Account length - How long customer
+3. Area code - Phone area code
+4. International plan - Yes/No
+5. Voice mail plan - Yes/No
+6. Number vmail messages - Count
+7. Total day minutes - Usage
+8. Total day calls - Count
+9. Total day charge - Cost
+10. Total eve minutes - Evening usage
+11. Total eve calls - Evening count
+12. Total eve charge - Evening cost
+13. Total night minutes - Night usage
+14. Total night calls - Night count
+15. Total night charge - Night cost
+16. Total intl minutes - International usage
+17. Total intl calls - International count
+18. Total intl charge - International cost
+19. Customer service calls - Complaint indicator (KEY!)
+20. Churn - TARGET (True/False)
+
+========================================================================
+AFTER DOWNLOAD:
+========================================================================
+Run: Rscript TRAIN_ORANGE_TELECOM_85.R
+
+Rich call pattern data - Good for 85%+!
