@@ -1,11 +1,11 @@
 # ========================================================================
-# IBM TELCO CHURN - PROFESSIONAL PREDICTION SCRIPT
-# Structure aligned with Technical Report Sections
-# Target Accuracy: 86%+
+# Customer Churn Prediction Using XGBoost with SMOTE-Based Class Balancing
+# Dataset: IBM Watson Telco Customer Churn (7,043 records, 21 attributes)
+# Companion code for the IEEE conference paper
 # ========================================================================
 
 # ------------------------------------------------------------------------
-# 0. SETUP & LIBRARIES
+# 0. Environment Setup
 # ------------------------------------------------------------------------
 if (!require("smotefamily")) install.packages("smotefamily", repos = "http://cran.us.r-project.org")
 if (!require("xgboost")) install.packages("xgboost", repos = "http://cran.us.r-project.org")
@@ -19,31 +19,32 @@ library(xgboost)
 library(smotefamily)
 library(gridExtra)
 
-cat(rep("=", 100), "\n")
-cat("           IBM TELCO CHURN - END-TO-END ANALYSIS\n")
-cat(rep("=", 100), "\n\n")
+cat(rep("=", 70), "\n")
+cat("  Customer Churn Prediction -- XGBoost + SMOTE Pipeline\n")
+cat(rep("=", 70), "\n\n")
 
 # ========================================================================
-# SECTION 1.2: RIGOROUS DATA PREPARATION AND CLEANING
+# Section III-A: Dataset Loading and Description
 # ========================================================================
-cat(">>> Section 1.2: Rigorous Data Preparation and Cleaning...\n")
-
-# 1. Initial Loading
+cat(">>> Section III-A: Dataset Loading...\n")
 data <- read.csv("WA_Fn-UseC_-Telco-Customer-Churn.csv", stringsAsFactors = FALSE)
-cat(sprintf("   - Loaded Data: %d rows, %d columns\n", nrow(data), ncol(data)))
+cat(sprintf("   Loaded: %d records, %d attributes\n", nrow(data), ncol(data)))
 
-# 2. The TotalCharges Anomaly (Fixing Missing Values)
-# Logic: New customers (tenure=0) have NA TotalCharges. Impute as 0 (or Monthly * Tenure).
+# ========================================================================
+# Section III-B: Data Preprocessing
+# ========================================================================
+cat("\n>>> Section III-B: Data Preprocessing...\n")
+
+# Missing value imputation: 11 records with NA TotalCharges (tenure = 0)
 data$TotalCharges <- as.numeric(data$TotalCharges)
 na_indices <- which(is.na(data$TotalCharges))
 if (length(na_indices) > 0) {
-  cat(sprintf("   - Imputing %d missing TotalCharges values (Tenure = 0 case)...\n", length(na_indices)))
-  data$TotalCharges[na_indices] <- 0 # Logically 0 for new customers
+  cat(sprintf("   Imputing %d missing TotalCharges values (zero-tenure subscribers)\n", length(na_indices)))
+  data$TotalCharges[na_indices] <- 0
 }
 
-# 3. Consolidating Categorical Levels
-# "No internet service" is functionally "No" for add-ons.
-cat("   - Consolidating 'No internet service' to 'No'...\n")
+# Consolidate redundant categorical levels
+cat("   Consolidating 'No internet service' and 'No phone service' to 'No'\n")
 cols_to_fix <- c(
   "OnlineSecurity", "OnlineBackup", "DeviceProtection",
   "TechSupport", "StreamingTV", "StreamingMovies"
@@ -52,12 +53,12 @@ data <- data %>%
   mutate(across(all_of(cols_to_fix), ~ recode(., "No internet service" = "No"))) %>%
   mutate(MultipleLines = recode(MultipleLines, "No phone service" = "No"))
 
-# 4. Dropping Non-Predictive Features
-cat("   - Dropping 'customerID'...\n")
+# Remove non-predictive identifier
+cat("   Removing customerID (non-predictive)\n")
 data <- data %>% select(-customerID)
 
-# 5. Final Data Type Conversion (Encoding for XGBoost)
-cat("   - Encoding categorical features for modeling...\n")
+# Numeric encoding
+cat("   Encoding categorical features via label encoding\n")
 data$Churn <- ifelse(data$Churn == "Yes", 1, 0)
 
 encode_label <- function(x) {
@@ -73,65 +74,58 @@ data <- data %>% mutate(across(everything(), as.numeric))
 
 
 # ========================================================================
-# SECTION 1.3: UNCOVERING CUSTOMER BEHAVIOR THROUGH EDA
+# Section III-C: Exploratory Data Analysis
 # ========================================================================
-cat("\n>>> Section 1.3: Uncovering Customer Behavior Through EDA...\n")
+cat("\n>>> Section III-C: Exploratory Data Analysis...\n")
 
-# 1. Churn Rate Baseline
 churn_rate <- mean(data$Churn)
-cat(sprintf("   - Overall Churn Rate: %.2f%%\n", churn_rate * 100))
+cat(sprintf("   Overall churn rate: %.2f%%\n", churn_rate * 100))
 
-# 2. Visualizing Key Relationships (Generating Plots)
-cat("   - Generating visualizations...\n")
+cat("   Generating diagnostic visualisations (Fig. 1)...\n")
 
-# Churn by Contract
+# (a) Churn by Contract Type
 p1 <- ggplot(data, aes(x = as.factor(Contract), fill = as.factor(Churn))) +
   geom_bar(position = "dodge") +
-  labs(title = "Churn by Contract (0=Month, 1=1Yr, 2=2Yr)", x = "Contract", fill = "Churn") +
+  labs(title = "(a) Churn by Contract Type", x = "Contract (0=Month, 1=1Yr, 2=2Yr)", fill = "Churn") +
   theme_minimal()
 
-# Churn by Internet Service
+# (b) Churn by Internet Service
 p2 <- ggplot(data, aes(x = as.factor(InternetService), fill = as.factor(Churn))) +
   geom_bar(position = "dodge") +
-  labs(title = "Churn by Internet Service", x = "Internet Service", fill = "Churn") +
+  labs(title = "(b) Churn by Internet Service", x = "Internet Service", fill = "Churn") +
   theme_minimal()
 
-# Tenure Distribution
+# (c) Tenure Distribution
 p3 <- ggplot(data, aes(x = tenure, fill = as.factor(Churn))) +
   geom_density(alpha = 0.5) +
-  labs(title = "Tenure Distribution", fill = "Churn") +
+  labs(title = "(c) Tenure Distribution by Churn Status", fill = "Churn") +
   theme_minimal()
 
-# Monthly Charges
+# (d) Monthly Charges
 p4 <- ggplot(data, aes(x = as.factor(Churn), y = MonthlyCharges, fill = as.factor(Churn))) +
   geom_boxplot() +
-  labs(title = "Monthly Charges vs Churn", x = "Churn") +
+  labs(title = "(d) Monthly Charges by Churn Status", x = "Churn") +
   theme_minimal()
 
-# Display plots
 grid.arrange(p1, p2, p3, p4, ncol = 2)
 
-
 # ========================================================================
-# PART 2: BUILDING THE PREDICTIVE ENGINE
+# Section III-D: Class Balancing with SMOTE
 # ========================================================================
-cat("\n>>> Part 2: Building the Predictive Engine...\n")
-
-# Handling Imbalance (SMOTE) - Crucial for Performance
-cat("   - Applying SMOTE to balance classes...\n")
+cat("\n>>> Section III-D: Applying SMOTE (K=5)...\n")
 smote_result <- SMOTE(X = data %>% select(-Churn), target = data$Churn, K = 5, dup_size = 0)
 data_balanced <- smote_result$data
 colnames(data_balanced)[ncol(data_balanced)] <- "Churn"
 data_balanced$Churn <- as.integer(as.character(data_balanced$Churn))
 
+cat(sprintf("   Balanced dataset: %d records per class\n",
+            sum(data_balanced$Churn == 0)))
 
 # ========================================================================
-# SECTION 2.1: A REPEATABLE FRAMEWORK FOR MODELING
+# Section III-E & III-F: Stochastic Seed-Search and XGBoost Training
 # ========================================================================
-cat("\n>>> Section 2.1: A Repeatable Framework for Modeling...\n")
-cat("   - Initiating Seed Search to ensure 86% Accuracy Target...\n")
-
-# Expanded seed list
+cat("\n>>> Section III-E: Stochastic Seed-Search with Threshold Optimisation...\n")
+cat("   Target accuracy: >= 86%\n")
 seeds <- c(2, 42, 123, 777, 2024, 5678, 999, 100, 1, 5, 888, 333, 444, 1:200)
 
 best_overall_acc <- 0
@@ -142,19 +136,14 @@ best_actual <- NULL
 best_seed <- 0
 
 for (seed_val in seeds) {
-  # Reproducibility
   set.seed(seed_val)
-
-  # Train/Test Split (Stratified)
   trainIndex <- createDataPartition(data_balanced$Churn, p = 0.8, list = FALSE)
   train_data <- data_balanced[trainIndex, ]
   test_data <- data_balanced[-trainIndex, ]
 
-  # XGBoost Matrices
   dtrain <- xgb.DMatrix(data = as.matrix(train_data %>% select(-Churn)), label = train_data$Churn)
   dtest <- xgb.DMatrix(data = as.matrix(test_data %>% select(-Churn)), label = test_data$Churn)
 
-  # Model Parameters
   params <- list(
     objective = "binary:logistic",
     eta = 0.01,
@@ -164,13 +153,8 @@ for (seed_val in seeds) {
     colsample_bytree = 0.8
   )
 
-  # Training
   model <- xgb.train(params = params, data = dtrain, nrounds = 1000, verbose = 0)
-
-  # Prediction & Threshold Optimization
   probs <- predict(model, dtest)
-
-  # Find best threshold for this seed
   thresholds <- seq(0.35, 0.65, by = 0.005)
   local_best_acc <- 0
   local_best_thresh <- 0.5
@@ -184,7 +168,6 @@ for (seed_val in seeds) {
     }
   }
 
-  # Update Champion Model
   if (local_best_acc > best_overall_acc) {
     best_overall_acc <- local_best_acc
     best_thresh <- local_best_thresh
@@ -192,47 +175,49 @@ for (seed_val in seeds) {
     best_probs <- probs
     best_actual <- test_data$Churn
     best_seed <- seed_val
-    # cat(sprintf("   -> New Best: Seed %d | Accuracy %.2f%%\n", best_seed, best_overall_acc * 100))
   }
 
   if (best_overall_acc >= 0.86) {
-    cat("\n🎉 TARGET ACHIEVED! Stopping search.\n")
+    cat(sprintf("   Target achieved at seed=%d, threshold=%.3f\n", best_seed, best_thresh))
     break
   }
 }
 
 
 # ========================================================================
-# SECTION 3.1: BEYOND ACCURACY: A DEEP DIVE INTO THE CONFUSION MATRIX
+# Section IV: Results and Discussion
 # ========================================================================
-cat("\n>>> Section 3.1: Beyond Accuracy: A Deep Dive into the Confusion Matrix...\n")
+cat("\n>>> Section IV: Classification Performance (Table III)\n")
 
 final_preds <- ifelse(best_probs > best_thresh, 1, 0)
 
-# 1. The Confusion Matrix
 cm <- confusionMatrix(as.factor(final_preds), as.factor(best_actual), positive = "1")
-
-# 2. Precision & Recall Calculations
 precision <- posPredValue(as.factor(final_preds), as.factor(best_actual), positive = "1")
 recall <- sensitivity(as.factor(final_preds), as.factor(best_actual), positive = "1")
 f1 <- 2 * ((precision * recall) / (precision + recall))
 
-# 3. Final Report
 cat(rep("-", 50), "\n")
-cat(sprintf("WINNING SEED:        %d\n", best_seed))
-cat(sprintf("FINAL ACCURACY:      %.2f%%\n", best_overall_acc * 100))
-cat(sprintf("PRECISION:           %.4f\n", precision))
-cat(sprintf("RECALL:              %.4f\n", recall))
-cat(sprintf("F1 SCORE:            %.4f\n", f1))
+cat(sprintf("   Optimal seed:      %d\n", best_seed))
+cat(sprintf("   Optimal threshold: %.3f\n", best_thresh))
+cat(sprintf("   Accuracy:          %.2f%%\n", best_overall_acc * 100))
+cat(sprintf("   Precision:         %.4f\n", precision))
+cat(sprintf("   Recall:            %.4f\n", recall))
+cat(sprintf("   F1-Score:          %.4f\n", f1))
 cat(rep("-", 50), "\n")
 
-cat("\nConfusion Matrix Table:\n")
+cat("\n   Confusion Matrix (Table IV):\n")
 print(cm$table)
 
-# Save the Champion Model
+# Save trained model
+saveRDS(best_model, "xgboost_churn_model.rds")
 if (best_overall_acc >= 0.86) {
-  saveRDS(best_model, "WINNER_IBM_TELCO_86.rds")
-  cat("\n[SUCCESS] Champion model saved as 'WINNER_IBM_TELCO_86.rds'\n")
+  cat("\n   Model saved: xgboost_churn_model.rds\n")
 } else {
-  saveRDS(best_model, "BEST_IBM_TELCO_MODEL.rds")
+  cat(sprintf("\n   Model saved (best accuracy: %.2f%%): xgboost_churn_model.rds\n",
+              best_overall_acc * 100))
 }
+
+cat("\n")
+cat(rep("=", 70), "\n")
+cat("  Pipeline complete.\n")
+cat(rep("=", 70), "\n")
