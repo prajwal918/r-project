@@ -1,3 +1,5 @@
+tryCatch({
+
 library(tidyverse)
 library(ggplot2)
 library(caret)
@@ -284,3 +286,8 @@ legend("bottomright",
                   paste0("Polynomial (AUC=", round(auc_poly, 3), ")")),
        col = c("red", "blue", "green", "purple", "orange", "brown", "pink", "cyan", "darkgreen", "black", "gray"),
        lwd = 2, cex = 0.6)
+
+}, error = function(e) {
+  message("An error occurred during script execution: ", e$message)
+  stop(e)
+})

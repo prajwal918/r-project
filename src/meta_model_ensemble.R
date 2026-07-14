@@ -1,4 +1,4 @@
-
+tryCatch({
 
 library(tidyverse)
 library(ggplot2)
@@ -330,3 +330,8 @@ cat("Best Accuracy:", round(max(performance_summary$Accuracy), 4), "\n")
 cat("Best AUC:", round(max(c(auc_log, auc_rf, auc_meta)), 4), "\n")
 cat("\nAll visualizations saved to working directory!\n")
 cat(rep("=", 60), "\n", sep = "")
+
+}, error = function(e) {
+  message("An error occurred during script execution: ", e$message)
+  stop(e)
+})
